@@ -1,50 +1,84 @@
 class: center, middle
 
-# Linear Haskell
+# (Linear) Haskell
 
 ## Practical Linearity in a Higher‑Order Polymorphic Language
 
-_by Jean-Philippe Bernardy, Mathieu Boespflug, Ryan&nbsp;R.&nbsp;Newton, Simon&nbsp;Peyton&nbsp;Jones, Arnaud&nbsp;Spiwack_
-
-Presenter: [Artem Pelenitsyn](http://staff.mmcs.sfedu.ru/~ulysses/), ČVUT
+Presented by [Artem Pelenitsyn](http://staff.mmcs.sfedu.ru/~ulysses/), Northeastern U (artem@ccs.neu.edu)
 
 ---
 
-# Linear Types: Promises
+## Linear Types: Why Care?
 
-* Correctness Guarantees
+* Well-Typed Resource-Aware Protocols
 
-* Efficiency
-
----
-
-count: false
-
-# Linear Types: Promises
-
-* Correctness Guarantees
-
-* <del>Efficiency</del> (not for now)
+  * Think a file handle that needs to be closed
 
 --
 
-# Linear Types: Challenges
+* Efficiency
+
+  * Linear Types Can Change the World! by _P. Wadler_ (1990)  
+    <img src="fig/wadler-cit1.png" width="930px">
+
+--
+
+* Rust
+
+---
+
+
+# Linear Haskell: Challenges
 
 * Backward Compatibility
 
 * Reusing Existing Codebase
 
-* Retrofitting In a Realistic Language
+* Retrofitting In a “Realistic” Language
 
 ---
 
-# What Kind of Guarantees?
+# Outline
+
+
+1. Haskell Prelude
+
+2. Linear Haskell Compiler Extension
+
+3. Linear Constraints Idea (ICFP '21) 
+
+4. General Q&A 
+
+---
+
+class: center, middle
+
+# Haskell Prelude
+
+---
+
+# What is Haskell
+
+
+---
+
+
+
+---
+
+class: center, middle
+
+# Linear Haskell Extension
+
+---
+
+# Linear Extension Guarantees
 
 * Does my sorting function return sensible result?
     ```haskell
-        sort :: [a] → SortedList a
+        sort :: [Int] → SortedList Int
         -- vs.
-        sort :: [a] ⊸ SortedList a
+        sort :: [Int] ⊸ SortedList Int
     ```
 * Can I do in-place updates?
 
@@ -52,9 +86,9 @@ count: false
 
 ---
 
-# Approach: Linear Arrows
+# Meet Linear Arrows
 
-`f :: s ⊸ t` assures that: 
+`f :: s ⊸ t` means that: 
 
 * **if** `(f u)` is _consumed_ exactly once,
 
@@ -76,55 +110,33 @@ _Consume_ ::=
 
 ```haskell
 -- List datatype
-data [a] = []               -- empty
-         | a : [a]          -- : ~ cons
+data List a where
+  Nil  :: List a
+  Cons :: a  ⊸ List a ⊸ List a
 
-(++) :: [a] ⊸ [a] ⊸ [a]   -- Type annotation
-
--- Definition by pattern matching on first argument:
-[]       ++ ys = ys
-(x : xs) ++ ys = x : (xs ++ ys)
+-- Linear concatenation function
+concat :: List a ⊸ List a ⊸ List a
+concat Nil         ys = ys
+concat (Cons x xs) ys = Cons x (concat xs ys)
 ```
 
 --
 
-⇒ Datatype contructors are linear by default. 
+Data constructors are linear by default: above list is equivalent to
 
-(Don't like this? We can do a la carte)
-
----
-
-# Datatype Linearity a la Carte
-
-_Task_ Function `f` needs a pair to use its components non-symmetrically  
-(say, first one linearly, second — unrestrictedly)
-
---
 ```haskell
-data PLU a b where 
-    PLU :: a ⊸ b → PLU a b
-
-f :: PLU (MArray Int) Int ⊸ MArray Int
-
-```
---
-Even better:
-```haskell
-data U a where                  -- Unrestricted resource
-    U :: a → U a
-    
-f :: (MArray Int, U Int) ⊸ MArray Int
+data List' a = Nil' | Cons' a (List' a)
 ```
 
 ---
 
-# Different Arrows Interplay Nicely
+# Interplay Between `⊸` And `→` (1)
 
 .left-half[
 ```haskell
 f :: s ⊸ t
 g :: s → t
-g x = f x
+g x = f x -- apply f to anything!
 ```
 ]
 --
@@ -152,95 +164,8 @@ f3 x = case x of (a, _) → (42, a)
 ]
 ---
 
-#Multiplicity Polymorphism
+# Interplay Between `⊸` And `→` (2)
 
-Is `map` of `(a ⊸ b) → [a] ⊸ [b]` or of `(a → b) → [a] → [b]`?
-
---
-
-Neither, it is
-
-```haskell
-map :: ∀p. (a →_p b) → [a] →_p [b]
-```
-
---
-
-So we abbreviate:
-
-* `⊸` ::= `→₁`
-
-* `→` ::= <code>→<sub>ω</sub></code>
-
-Thus, we have two multiplicities: 1 and ω.
-
----
-
-# Midterm: Typing Function Composition
-
-```haskell
-(◦) :: 
-    ∀p q.    (b →_p c)
-    ⊸       (a →_q b)
-    →_p      a
-    →_{???}  c
-(f ◦ g) x = f (g x)
-```
----
-
-count: false
-
-# Midterm: Typing Function Composition
-
-```haskell
-(◦) :: 
-    ∀p q.    (b →_p c)
-    ⊸       (a →_q b)
-    →_p      a
-    →_{p·q}  c
-(f ◦ g) x = f (g x)
-```
-
----
-
-#Linear Arrows vs Linear Kinds 
-
-.right[(or: Girard was right in the first place)]
-
---
-
-- Strictness & Divergence
-
-.left-half[
-```haskell
-f :: a ⊸ (a, Bool)
-f x = (x, True)
-```
-]
-.right-half[
-``` haskell
-g :: [Int] ⊸ [Int]
-g xs = repeat 1 ++ xs
-```
-]
-
---
-
-- Exceptions
-
---
-
-- Single type universe
-
---
-
-- It can play nicely with dependent function types too!
-
----
-
-# On the other hand … 
-
-How to use `⊸` when one expects `→`, e.g.:
 ```haskell
 f :: Int ⊸ Int
 g :: (Int → Int) → Bool
@@ -250,32 +175,83 @@ In general, do we want `⊸ <: →`?
 
 --
 
-Mom told me: don't mix HM and subtyping! So let's make a hack:
+Compiler will take care of it:
+
 ```haskell
-h = g f ↝  g (λx → f x)
+h = g f ↝  g (λx → f x)    -- s.c. η-expansion
 ```
-This has certain tradeoffs…
 
 ---
 
-# On the other hand … (contd.)
+# Multiplicity Polymorphism
 
-Can we have linear return types?
+Is `map` of `(a ⊸ b) → [a] ⊸ [b]` or of `(a → b) → [a] → [b]`?
 
 --
 
-We are smart and can invent “encodings”:
+Neither. It is:
+
 ```haskell
-f :: A → (B ⊸ !r) ⊸ r -- f effectively accepts A and returns linear B
+map :: ∀{p} a b. (a %p → b) → [a] %p → [b]
+```
+
+--
+
+Abbreviate as follows:
+
+
+* `a ⊸ b` ::= `a %1 → b`
+
+* `a → b` ::= `a %Many → b`
+
+Thus, there are two concrete multiplicities: `1` and `Many`.
+
+---
+
+# Quiz: Typing Function Composition
+
+```haskell
+(◦) :: ∀{p} {q}.
+  (b %p → c) %1 →
+  (a %q → b) %p →
+  a           %? →      -- what's `?`?
+  c
+  
+(f ◦ g) x = f (g x)
+```
+---
+
+count: false
+
+# Quiz: Typing Function Composition
+
+```haskell
+(◦) :: ∀{p} {q}.
+  (b %p → c) %1 →
+  (a %q → b) %p →
+  a           %{p·q} →
+  c
+  
+(f ◦ g) x = f (g x)
+```
+
+---
+
+# Can we have linear return types?
+
+Use the double negation trick:
+```haskell
+f :: A → (B ⊸ r) ⊸ r -- f effectively accepts A and returns linear B
 ```
 --
+
 This plays nicely with monads!
 
 ```haskell
 type IO p a
 
 return :: a →_p IO p a
-bind   :: IO p a ⊸ (a →_p IO q b) ⊸ IO q b
+bind   :: IO p a ⊸ (a %p → IO q b) ⊸ IO q b
 ```
 
 ---
@@ -304,24 +280,53 @@ do { x ← a; f x }      ~       bind a (\x → f x)
 
 ---
 
-### Talks Are Cheap, Show Me Some _Greek_: $\lambda_{\to}^q$
+# References
 
-<!-- .center[<img src="lam-lin.png" width="800">] -->
+* Linear Haskell: Practical Linearity In a Higher-Order Polymorphic Language / _J.-P. Bernardy et al._, POPL'18,
+  [doi:10.1145/3158093](https://dl.acm.org/doi/10.1145/3158093)
+
+* Bounded Linear Types in a Resource Semiring / _D.R. Ghica and A.I.&nbsp;Smith_, ESOP '14
+    * (_or, if like dep-types:_) I Got Plenty o’ Nuttin’ / _C. McBride_, Wadler's&nbsp;Fest&nbsp;'16
+
+* Linear Types Can Change the World! / _P. Wadler_, PCM '90,
+  [[PDF]](http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.31.5002&rep=rep1&type=pdf)
+
 
 ---
 
-**Typing $\lambda_{\to}^q$:** `Γ ⊢ t : A`  
-.small[consuming `t : A` exactly once will consume each binding `(x :_π A)` in Γ with multiplicity π]
+class: center, middle
 
-<!--.center[<img src="typing.png" width="930">]-->
+# Backup
 
 ---
 
-# Coda: Threats To Validity
+# Datatype Linearity a la Carte
 
-* Huge overhaul: change the whole `base`, also modification of GHC Core
+_Task_ Function `f` needs a pair to use its components non-symmetrically  
+(say, first one linearly, second — unrestrictedly)
 
 --
+```haskell
+data PLU a b where 
+    PLU :: a ⊸ b → PLU a b
+
+f :: PLU (MArray Int) Int ⊸ MArray Int
+
+```
+--
+Even better:
+```haskell
+data U a where                  -- Unrestricted resource
+    U :: a → U a
+    
+f :: (MArray Int, U Int) ⊸ MArray Int
+```
+
+---
+
+# Threats To Validity
+
+* Huge overhaul: change the whole `base`, also modification of GHC Core
 
 * Retrofitting still not completely thought of
 
@@ -329,11 +334,7 @@ do { x ← a; f x }      ~       bind a (\x → f x)
     
     * Multiplicity 0 is already dropped
 
---
-
 * Type inference is not formally developed
-
---
 
 * Generally, elaboration of LH to $\lambda_{\to}^q$ (or GHC Core) is not 100% clear
 
@@ -364,16 +365,31 @@ do { x ← a; f x }      ~       bind a (\x → f x)
 
 ---
 
-# References
+# Linear Arrows vs Linear Kinds 
 
-* Linear Haskell: Practical Linearity In a Higher-Order Polymorphic Language / _J.-P. Bernardy et al._ POPL'18
+.right[(or: Girard was right in the first place)]
 
-* Bounded Linear Types in a Resource Semiring / _D.R. Ghica and A.I.&nbsp;Smith_, ESOP '14
-    * (_or, if like dep-types:_) I Got Plenty o’ Nuttin’ / _C. McBride_, Wadler's&nbsp;Fest&nbsp;'16
+--
 
-* Linear Types Can Change the World! / _P. Wadler_, PCM '90
+- Strictness & Divergence
 
-* Coeffects literature, e.g.
-    * [Petricek et al.] @ ICALP '13
-    * [Brunel et al.] @ ESOP '14
+.left-half[
+```haskell
+f :: a ⊸ (a, Bool)
+f x = (x, True)
+```
+]
+.right-half[
+``` haskell
+g :: [Int] ⊸ [Int]
+g xs = repeat 1 ++ xs
+```
+]
+
+- Exceptions
+
+- Single type universe
+
+- Can play nicely with dependent function types too as shown by Idris 2.
+
 
