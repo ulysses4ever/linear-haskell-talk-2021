@@ -1,0 +1,15 @@
+{
+  "name": "linear-haskell-slides",
+  "version": "0.0.1",
+  "description": "Slides for BCC talk",
+  "main": "index.html",
+  "scripts": {
+    "dev": "lite-server",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Artem Pelenitsyn",
+  "license": "MIT",
+  "devDependencies": {
+    "lite-server": "^2.6.1"
+  }
+}
