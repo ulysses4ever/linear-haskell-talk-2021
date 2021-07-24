@@ -1,6 +1,6 @@
 class: center, middle
 
-# (Linear) Haskell
+# Linear Haskell
 
 ## Practical Linearity in a Higher‑Order Polymorphic Language
 
@@ -103,7 +103,7 @@ class: center, middle
 
 ---
 
-# Linear Arrows: Conditional Consumption
+## Linear Arrows: Conditional Consumption
 
 `f :: s ⊸ t` means that: 
 
@@ -157,7 +157,7 @@ Same with GADTs unless both holds:
 
 * a module turns on the `-XLinearTypes` extension and
 
-* uses the regular arrow for one of its GADTs
+* uses the regular arrow for one of its GADTs.
 
 ---
 
@@ -189,7 +189,7 @@ f3 x = case x of (a, Ur _) -> (42, a) -- is this OK?
 
 ---
 
-# Interplay Between `⊸` And `->`
+# Interplay Between ⊸ And →
 
 ```haskell
 f :: s ⊸ t
@@ -207,7 +207,7 @@ f xs ys = sum (xs ++ ys) + sum ys   -- is this OK?
 
 ---
 
-# Interplay Between `⊸` And `->` (contd.)
+# Interplay Between ⊸ And → (contd.)
 
 ```haskell
 f :: Int ⊸ Int
