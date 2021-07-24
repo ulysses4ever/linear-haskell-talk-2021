@@ -18,7 +18,7 @@ Presented by [Artem Pelenitsyn](http://staff.mmcs.sfedu.ru/~ulysses/), Northeast
 
 --
 
-* Efficiency
+* Run-time Performance
 
   * Linear Types Can Change the World! by _P. Wadler_ (1990)  
     <img src="fig/wadler-cit1.png" width="930px">
@@ -37,6 +37,12 @@ Presented by [Artem Pelenitsyn](http://staff.mmcs.sfedu.ru/~ulysses/), Northeast
 * Reusing Existing Codebase
 
 * Retrofitting In a “Realistic” Language
+
+--
+
+##  Non-Challenge
+
+* Run-time Performance
 
 ---
 
@@ -62,17 +68,101 @@ class: center, middle
 
 ---
 
-# What is Haskell
+## What is Haskell (following Haskell Report 2010)
 
+Haskell is
+
+1. a general-purpose, 
+2. purely 
+2. functional programming language 
+3. featuring higher-order functions, 
+4. nonstrict semantics, 
+5. static polymorphic typing,
+6. user-defined algebraic data types, pattern matching, 
+7. a module system, 
+8. a monadic I/O system, 
+9. and a rich set of primitive data types (including lists,
+   arrays, arbitrary- and fixed-precision integers, and floating-point numbers).
+
+---
+# Example: Lists
+
+```haskell
+-- List datatype; `a` is a type parameter, they're always lower cased
+data List a =
+  Nil |
+  Cons a (List a) 
+```
+--
+```haskell
+-- List datatype, GADT Syntax, absolutely equivalent to the previous
+data List a where   
+  Nil  :: List a
+  Cons :: a -> List a -> List a
+```
+
+--
+
+```haskell
+-- List concatenation function
+concat :: List a -> List a -> List a -- ~ List a -> (List a -> List a)
+concat Nil         ys = ys
+concat (Cons x xs) ys = Cons x (concat xs ys)
+```
 
 ---
 
 # Monads
 
 ```haskell
-do { x ← a; f x }      -- ~    a >>= (\x -> f x)
+class Monad m where        -- interface Monad
+  return :: a -> m a
+  (>>=)  :: forall a b. m a -> (a -> m b) -> m b
+```
+--
+
+```haskell
+instance Monad List where  -- implementation for List 
+  return a = Cons a Nil
+  
+  Nil         >>= f = Nil
+  (Cons a as) >>= f = concat (f a) (as >>= f) 
+```
+--
+
+Do-notation
+```haskell
+do
+  x <- a
+  y <- f x      
+  return (g y) -- ~ a >>= (\x -> f x >>= (\y -> return g y))
 ```
 
+---
+
+# Monads: Why Care?
+
+Monads are known to provide a reasonable pure interface to impure operations.
+
+```haskell
+firstLine :: FilePath -> IO String
+firstLine fp = do
+  h  <- openFile fp
+  xs <- readLine h
+  closeFile h
+  return xs 
+```
+
+--
+
+`IO` is an abstract type with the following operations:
+
+```haskell
+openFile  :: FilePath -> IO Handle
+readLine  :: Handle   -> IO String
+closeFile :: Handle   -> IO ()
+-- ...
+```
 
 ---
 
@@ -129,7 +219,7 @@ _Consume_ ::=
 -- List datatype
 data List a where
   Nil  :: List a
-  Cons :: a  ⊸ List a ⊸ List a
+  Cons :: a ⊸ List a ⊸ List a
 ```
 
 --
@@ -312,8 +402,8 @@ freeze    :: MArray a ⊸ Ur (Array a)
 ```haskell
 firstLine :: FilePath -> IOL String
 firstLine fp = do
-  h ← openFile fp
-  (h, Ur xs) ← readLine h  -- threading the handle
+  h <- openFile fp
+  (h, Ur xs) <- readLine h  -- threading the handle
   closeFile h
   return xs 
 ```
