@@ -10,6 +10,8 @@ Presented by [Artem Pelenitsyn](http://staff.mmcs.sfedu.ru/~ulysses/), Northeast
 
 ## Linear Types: Why Care?
 
+--
+
 * Well-Typed Resource-Aware Protocols
 
   * Think a file handle that needs to be closed
@@ -40,12 +42,15 @@ Presented by [Artem Pelenitsyn](http://staff.mmcs.sfedu.ru/~ulysses/), Northeast
 
 # Outline
 
-
 1. Haskell Prelude
 
-2. Linear Haskell Compiler Extension
+2. Linear Haskell Compiler Extension (POPL '18, GHC 9.0 @ Feb 2021)
 
-3. Linear Constraints Idea (ICFP '21) 
+   1. Definition and interactions with other language features 
+   
+   2. Safe resource management
+
+3. Linear Constraints Idea (in submission) 
 
 4. General Q&A 
 
@@ -62,6 +67,11 @@ class: center, middle
 
 ---
 
+# Monads
+
+```haskell
+do { x ← a; f x }      -- ~    a >>= (\x -> f x)
+```
 
 
 ---
@@ -72,11 +82,11 @@ class: center, middle
 
 ---
 
-# Linear Extension Guarantees
+## Linear Extension Allows Stricter Contracts
 
-* Does my sorting function return sensible result?
+* Does my sorting function return sensible result?<sup><small>1</small></sup>
     ```haskell
-        sort :: [Int] → SortedList Int
+        sort :: [Int] -> SortedList Int
         -- vs.
         sort :: [Int] ⊸ SortedList Int
     ```
@@ -84,9 +94,16 @@ class: center, middle
 
 * Do I close my file handles?
 
+--
+
+  
+
+<sup><small>1</small></sup>
+[Blog post](https://www.tweag.io/blog/2018-03-08-linear-sort/) on that (it's not super easy)
+
 ---
 
-# Meet Linear Arrows
+# Linear Arrows: Conditional Consumption
 
 `f :: s ⊸ t` means that: 
 
@@ -113,86 +130,112 @@ _Consume_ ::=
 data List a where
   Nil  :: List a
   Cons :: a  ⊸ List a ⊸ List a
+```
 
+--
+
+```haskell
 -- Linear concatenation function
 concat :: List a ⊸ List a ⊸ List a
 concat Nil         ys = ys
 concat (Cons x xs) ys = Cons x (concat xs ys)
 ```
 
---
+---
 
-Data constructors are linear by default: above list is equivalent to
+# Backward Compatability for Datatypes 
+
+Data constructors are linear by default; previous list equivalent:
 
 ```haskell
-data List' a = Nil' | Cons' a (List' a)
+data List1 a = Nil1 | Cons1 a (List1 a)
 ```
+
+--
+
+Same with GADTs unless both holds:
+
+* a module turns on the `-XLinearTypes` extension and
+
+* uses the regular arrow for one of its GADTs
 
 ---
 
-# Interplay Between `⊸` And `→` (1)
+## Datatypes and Linearity (ctd.)
 
-.left-half[
-```haskell
-f :: s ⊸ t
-g :: s → t
-g x = f x -- apply f to anything!
-```
-]
---
-.right-half[
-```haskell
-sum :: [Int] ⊸ Int
-f   :: [Int] ⊸ [Int] → Int
-f xs ys = sum (xs ++ ys) + sum ys
-```
-]
+**Linear Pairs**
 
---
 
-.left-half[
 ```haskell
-f1 :: (Int, Int) → (Int, Int)
-f1 x = case x of (a, b) → (a, a)
+f1 :: (Int, Int) -> (Int, Int)
+f1 x = case x of (a, b) -> (a, a)
 
 f2 :: (Int, Int) ⊸ (Int, Int)
-f2 x = case x of (a, b) → (b, a)
+f2 x = case x of (a, b) -> (b, a)
 
-f3 :: (Int, U Int) ⊸ (Int, Int)
-f3 x = case x of (a, _) → (42, a)
 ```
-]
+
+--
+
+**Unrestricted Constructors**
+
+```haskell
+data Ur a where  -- Unrestricted resource
+    Ur :: a -> Ur a
+
+f3 :: (Int, Ur Int) ⊸ (Int, Int)
+f3 x = case x of (a, Ur _) -> (42, a) -- is this OK?
+```
+
 ---
 
-# Interplay Between `⊸` And `→` (2)
+# Interplay Between `⊸` And `->`
+
+```haskell
+f :: s ⊸ t
+g :: s -> t
+g x = f x -- is this OK?
+```
+--
+```haskell
+sum  :: [Int] ⊸ Int
+(++) :: [Int] ⊸ [Int] ⊸ Int -- concatenation
+f    :: [Int] ⊸ [Int] -> Int
+
+f xs ys = sum (xs ++ ys) + sum ys   -- is this OK?
+```
+
+---
+
+# Interplay Between `⊸` And `->` (contd.)
 
 ```haskell
 f :: Int ⊸ Int
-g :: (Int → Int) → Bool
+g :: (Int -> Int) -> Bool
 h = g f -- Legal???
 ```
-In general, do we want `⊸ <: →`?
+In general, do we want `⊸ <: ->`?
 
 --
 
 Compiler will take care of it:
 
 ```haskell
-h = g f ↝  g (λx → f x)    -- s.c. η-expansion
+h = g f ↝  g (λx -> f x)    -- s.c. η-expansion
 ```
 
 ---
 
 # Multiplicity Polymorphism
 
-Is `map` of `(a ⊸ b) → [a] ⊸ [b]` or of `(a → b) → [a] → [b]`?
+Is `map` of `(a ⊸ b) -> [a] ⊸ [b]` or of `(a -> b) -> [a] -> [b]`?
 
 --
 
 Neither. It is:
 
 ```haskell
-map :: ∀{p} a b. (a %p → b) → [a] %p → [b]
+map :: ∀{p} a b. (a %p -> b) -> [a] %p -> [b]
 ```
 
 --
@@ -200,9 +243,9 @@ map :: ∀{p} a b. (a %p → b) → [a] %p → [b]
 Abbreviate as follows:
 
 
-* `a ⊸ b` ::= `a %1 → b`
+* `a ⊸ b` ::= `a %1 -> b`
 
-* `a → b` ::= `a %Many → b`
+* `a -> b` ::= `a %Many -> b`
 
 Thus, there are two concrete multiplicities: `1` and `Many`.
 
@@ -212,9 +255,9 @@ Thus, there are two concrete multiplicities: `1` and `Many`.
 
 ```haskell
 (◦) :: ∀{p} {q}.
-  (b %p → c) %1 →
-  (a %q → b) %p →
-  a           %? →      -- what's `?`?
+  (b %p -> c) %1 ->
+  (a %q -> b) %p ->
+  a           %? ->      -- what's `?`?
   c
   
 (f ◦ g) x = f (g x)
@@ -227,9 +270,9 @@ count: false
 
 ```haskell
 (◦) :: ∀{p} {q}.
-  (b %p → c) %1 →
-  (a %q → b) %p →
-  a           %{p·q} →
+  (b %p -> c) %1 ->
+  (a %q -> b) %p ->
+  a           %{p·q} ->
   c
   
 (f ◦ g) x = f (g x)
@@ -237,59 +280,156 @@ count: false
 
 ---
 
-# Can we have linear return types?
+# Linearity for Return Types?
 
-Use the double negation trick:
+Old trick — use CPS (continuation passing):
 ```haskell
-f :: A → (B ⊸ r) ⊸ r -- f effectively accepts A and returns linear B
+f :: A -> (B ⊸ r) ⊸ r -- effectively, `f` accepts `A` & returns linear `B`
 ```
+
 --
 
-This plays nicely with monads!
+Especially useful for monads:
 
 ```haskell
-type IO p a
+type IO p a  -- means: construct value `a` that can only be used
+             --        with multiplicity `p`
 
-return :: a →_p IO p a
-bind   :: IO p a ⊸ (a %p → IO q b) ⊸ IO q b
+return :: a %p -> IO p a
+(>>=)  :: IO p a ⊸ (a %p -> IO q b) ⊸ IO q b
+```
+
+--
+
+```haskell
+foo :: SomeLinearMonad a
+foo = do
+  linearValue <- action1
+  -- ...
+```
+
+
+---
+
+class: center, middle
+
+# Safe Resource Management
+
+---
+
+# Unsafe In-place Mutation (pre-linear)
+
+```haskell
+array :: Int -> [(Int, a)] -> Array a
+array size pairs = runST do
+  ma ← newMArray size     -- create mutable array
+  forM_ pairs (write ma)  -- monadic for-loop to fill it
+  unsafeFreeze ma         -- turn it into immutable array -- UNSAFE!
+
 ```
 
 ---
 
-# Larger Example: Linear Input/Output
+# Safe File Handling
 
 ```haskell
-printHandle :: File ⊸ IO ω ()
-printHandle f = do
-                 { (f, U b) ← atEOF f
-                 ; if b then closeFile f
-                   else do { (f, U c) ← read f 
-                           ; putChar c
-                           ; printHandle f } }
+firstLine :: FilePath -> IO 1 String
+firstLine fp = do
+  h ← openFile fp
+  (h, Ur xs) ← readLine h  -- threading the handle
+  closeFile h
+  return xs 
 ```
 
 ```haskell
-atEOF     :: File ⊸ IO 1 (File, U Bool)
-closeFile :: File ⊸ IO ω ()
-read      :: File ⊸ IO 1 (File, U Char)
-putChar   :: Char → IO ω ()
-```
-```haskell
-do { x ← a; f x }      ~       bind a (\x → f x)
+openFile  :: FilePath -> IO 1 Handle
+readLine  :: Handle   ⊸ IO 1 (Handle, Ur String)
+closeFile :: Handle   ⊸ IO 1 ()
 ```
 
 ---
 
-# References
+class: center, middle
+
+# Linear Constraints
+
+---
+
+# Type Classes as Implicits 
+
+```haskell
+foo :: a -> String
+foo a = {- what could that be? -}
+```
+
+--
+
+.left-half[
+But with a constraint: 
+```haskell
+class Show a where
+  show :: a -> String
+
+showTwice :: Show a => a -> String
+showTwice a = show a ++ show a
+```
+]
+--
+.right-half[
+Translation (inside GHC)
+```haskell
+data ShowD a = ShowD {
+  show :: a -> String }
+
+showTwice' :: ShowD a -> a -> String
+showTwice' d a = show d a ++ show d a
+```
+]
+
+---
+
+class: small
+
+# Linear Constraints for IO 1
+
+.left-half[
+Original Linear Haskell
+```haskell
+closeFile :: Handle   ⊸ IO 1 ()
+```
+```haskell
+openFile  :: FilePath -> IO 1 Handle
+readLine  :: Handle   ⊸ IO 1 (Handle, Ur String)
+closeFile :: Handle   ⊸ IO 1 ()
+```
+]
+.right-half[
+Linear Constraints
+```haskell
+closeFile :: Open h =◦ Handle h -> IO 1 ()
+```
+--
+```haskell
+abc
+```
+]
+
+
+---
+
+## References
 
 * Linear Haskell: Practical Linearity In a Higher-Order Polymorphic Language / _J.-P. Bernardy et al._, POPL'18,
   [doi:10.1145/3158093](https://dl.acm.org/doi/10.1145/3158093)
 
-* Bounded Linear Types in a Resource Semiring / _D.R. Ghica and A.I.&nbsp;Smith_, ESOP '14
-    * (_or, if like dep-types:_) I Got Plenty o’ Nuttin’ / _C. McBride_, Wadler's&nbsp;Fest&nbsp;'16
+* Linear Constraints / _J.-P. Bernardy et al._, in submission,
+  [arXiv:2103.06127](https://arxiv.org/abs/2103.06127)
 
 * Linear Types Can Change the World! / _P. Wadler_, PCM '90,
   [[PDF]](http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.31.5002&rep=rep1&type=pdf)
+  
+* How to make ad-hoc polymorphism less ad hoc / P. Wadler, S. Blott, POPL '89,
+  [doi:10.1145/75277.75283](https://dl.acm.org/doi/10.1145/75277.75283)
 
 
 ---
@@ -299,28 +439,6 @@ class: center, middle
 # Backup
 
 ---
-
-# Datatype Linearity a la Carte
-
-_Task_ Function `f` needs a pair to use its components non-symmetrically  
-(say, first one linearly, second — unrestrictedly)
-
---
-```haskell
-data PLU a b where 
-    PLU :: a ⊸ b → PLU a b
-
-f :: PLU (MArray Int) Int ⊸ MArray Int
-
-```
---
-Even better:
-```haskell
-data U a where                  -- Unrestricted resource
-    U :: a → U a
-    
-f :: (MArray Int, U Int) ⊸ MArray Int
-```
 
 ---
 
@@ -346,12 +464,12 @@ f :: (MArray Int, U Int) ⊸ MArray Int
 
 --
 
-* Efficiency is on its way:
+* Efficiency could be worked out?
 
     * some reported in the paper (ad-hoc);
     
     * some of «cardinality&nbsp;analysis» subsumed by multiplicity annotations
-    (good for inling: e.g. don't inline `(λx → x ++ x) expensive`).
+    (good for inling: e.g. don't inline `(λx -> x ++ x) expensive`).
 
 --
 
