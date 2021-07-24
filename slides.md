@@ -369,26 +369,68 @@ showTwice' d a = show d a ++ show d a
 
 # Linear Constraints for IOL
 
-.left-half[
+.left-third[
 Original Linear Haskell
 ```haskell
 closeFile ::
   Handle ⊸ IOL ()
 ```
 ]
-.right-half[
+.right-third[
 Linear Constraints
 ```haskell
 closeFile ::
-  Open h =◦ Handle h -> IOL ()
+  Open h =○ Handle h -> IOL ()
+```
+]
+--
+.left-third[
+```haskell
+openFile ::
+  FilePath -> IOL Handle
+```
+]
+.right-third[
+```haskell
+openFile ::
+  FilePath -> IOL (∃h. Open h =○ Ur (Handle h))
+```
+]
+--
+.left-third[
+```haskell
+readLine ::
+  Handle ⊸
+  IOL (Handle, Ur String)
+```
+]
+.right-third[
+```haskell
+readLine ::
+  Open h =○ Handle h ->
+  IOL (Open h =○ Ur String)
 ```
 ]
 
 ---
+
+## Safe File Handling With Linear Constraints
+
 ```haskell
-openFile  :: FilePath -> IOL Handle
-readLine  :: Handle   ⊸ IOL (Handle, Ur String)
-closeFile :: Handle   ⊸ IOL ()
+firstLine :: FilePath -> IOL String
+firstLine fp = do
+  pack! h  <- openFile fp
+  pack! xs <- readLine h
+  closeFile h
+  return xs
+```
+
+
+Interface:
+```haskell
+closeFile :: Open h =○ Handle h -> IOL ()
+openFile  :: FilePath -> IOL (∃h. Open h =○ Ur (Handle h))
+readLine  :: Open h =○ Handle h -> IOL (Open h =○ Ur String)
 ```
 
 ---
