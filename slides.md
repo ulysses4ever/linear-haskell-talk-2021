@@ -226,60 +226,6 @@ h = g f ↝  g (λx -> f x)    -- s.c. η-expansion
 
 ---
 
-# Multiplicity Polymorphism
-
-Is `map` of `(a ⊸ b) -> [a] ⊸ [b]` or of `(a -> b) -> [a] -> [b]`?
-
---
-
-Neither. It is:
-
-```haskell
-map :: ∀{p} a b. (a %p -> b) -> [a] %p -> [b]
-```
-
---
-
-Abbreviate as follows:
-
-
-* `a ⊸ b` ::= `a %1 -> b`
-
-* `a -> b` ::= `a %Many -> b`
-
-Thus, there are two concrete multiplicities: `1` and `Many`.
-
----
-
-# Quiz: Typing Function Composition
-
-```haskell
-(◦) :: ∀{p} {q}.
-  (b %p -> c) %1 ->
-  (a %q -> b) %p ->
-  a           %? ->      -- what's `?`?
-  c
-  
-(f ◦ g) x = f (g x)
-```
----
-
-count: false
-
-# Quiz: Typing Function Composition
-
-```haskell
-(◦) :: ∀{p} {q}.
-  (b %p -> c) %1 ->
-  (a %q -> b) %p ->
-  a           %{p·q} ->
-  c
-  
-(f ◦ g) x = f (g x)
-```
-
----
-
 # Linearity for Return Types?
 
 Old trick — use CPS (continuation passing):
@@ -292,11 +238,10 @@ f :: A -> (B ⊸ r) ⊸ r -- effectively, `f` accepts `A` & returns linear `B`
 Especially useful for monads:
 
 ```haskell
-type IO p a  -- means: construct value `a` that can only be used
-             --        with multiplicity `p`
+type IOL a  -- means: IO-value `a` that can only be used once
 
-return :: a %p -> IO p a
-(>>=)  :: IO p a ⊸ (a %p -> IO q b) ⊸ IO q b
+return :: a ⊸ IOL a
+(>>=)  :: IO p a ⊸ (a ⊸ IOL b) ⊸ IOL b
 ```
 
 --
@@ -328,12 +273,44 @@ array size pairs = runST do
 
 ```
 
+--
+
+Monadic Mutable Array Interface:
+```haskell
+newMArray    :: Int → ST s (MArray s a)
+write        :: MArray s a → (Int, a) → ST s ()
+unsafeFreeze :: MArray s a → ST s (Array a)
+
+forM_ :: Monad m ⇒ [a] → (a → m ()) → m ()
+runST :: (∀s. ST s a) → a
+```
+
+---
+
+# Safe In-place Mutation (Linear Haskell)
+
+```haskell
+array :: Int -> [(Int, a)] -> Array a
+array size pairs =
+  newMArray size (λma -> freeze (foldl write ma pairs))
+
+```
+
+--
+
+Linear Mutable Array Interface:
+```haskell
+newMArray :: Int -> (MArray a ⊸ Ur b) ⊸ b
+write     :: MArray a ⊸ (Int, a) -> MArray a
+freeze    :: MArray a ⊸ Ur (Array a)
+```
+
 ---
 
 # Safe File Handling
 
 ```haskell
-firstLine :: FilePath -> IO 1 String
+firstLine :: FilePath -> IOL String
 firstLine fp = do
   h ← openFile fp
   (h, Ur xs) ← readLine h  -- threading the handle
@@ -341,10 +318,12 @@ firstLine fp = do
   return xs 
 ```
 
+--
+
 ```haskell
-openFile  :: FilePath -> IO 1 Handle
-readLine  :: Handle   ⊸ IO 1 (Handle, Ur String)
-closeFile :: Handle   ⊸ IO 1 ()
+openFile  :: FilePath -> IOL Handle
+readLine  :: Handle   ⊸ IOL (Handle, Ur String)
+closeFile :: Handle   ⊸ IOL ()
 ```
 
 ---
@@ -388,32 +367,29 @@ showTwice' d a = show d a ++ show d a
 
 ---
 
-class: small
-
-# Linear Constraints for IO 1
+# Linear Constraints for IOL
 
 .left-half[
 Original Linear Haskell
 ```haskell
-closeFile :: Handle   ⊸ IO 1 ()
-```
-```haskell
-openFile  :: FilePath -> IO 1 Handle
-readLine  :: Handle   ⊸ IO 1 (Handle, Ur String)
-closeFile :: Handle   ⊸ IO 1 ()
+closeFile ::
+  Handle ⊸ IOL ()
 ```
 ]
 .right-half[
 Linear Constraints
 ```haskell
-closeFile :: Open h =◦ Handle h -> IO 1 ()
-```
---
-```haskell
-abc
+closeFile ::
+  Open h =◦ Handle h -> IOL ()
 ```
 ]
 
+---
+```haskell
+openFile  :: FilePath -> IOL Handle
+readLine  :: Handle   ⊸ IOL (Handle, Ur String)
+closeFile :: Handle   ⊸ IOL ()
+```
 
 ---
 
@@ -435,12 +411,73 @@ abc
 ---
 
 class: center, middle
+count: false
 
 # Backup
 
 ---
+count: false
+
 
 ---
+count: false
+
+# Multiplicity Polymorphism
+
+Is `map` of `(a ⊸ b) -> [a] ⊸ [b]` or of `(a -> b) -> [a] -> [b]`?
+
+--
+
+Neither. It is:
+
+```haskell
+map :: ∀{p} a b. (a %p -> b) -> [a] %p -> [b]
+```
+
+--
+
+Abbreviate as follows:
+
+
+* `a ⊸ b` ::= `a %1 -> b`
+
+* `a -> b` ::= `a %Many -> b`
+
+Thus, there are two concrete multiplicities: `1` and `Many`.
+
+---
+count: false
+
+# Quiz: Typing Function Composition
+
+```haskell
+(◦) :: ∀{p} {q}.
+  (b %p -> c) %1 ->
+  (a %q -> b) %p ->
+  a           %? ->      -- what's `?`?
+  c
+  
+(f ◦ g) x = f (g x)
+```
+---
+
+count: false
+
+# Quiz: Typing Function Composition
+
+```haskell
+(◦) :: ∀{p} {q}.
+  (b %p -> c) %1 ->
+  (a %q -> b) %p ->
+  a           %{p·q} ->
+  c
+  
+(f ◦ g) x = f (g x)
+```
+
+---
+
+count: false
 
 # Threats To Validity
 
@@ -457,6 +494,8 @@ class: center, middle
 * Generally, elaboration of LH to $\lambda_{\to}^q$ (or GHC Core) is not 100% clear
 
 ---
+
+count: false
 
 # On the bright side
 
@@ -483,7 +522,10 @@ class: center, middle
 
 ---
 
+count: false
+
 # Linear Arrows vs Linear Kinds 
+
 
 .right[(or: Girard was right in the first place)]
 
